@@ -1,0 +1,83 @@
+version: "3.9"
+
+services:
+
+  # ── API Server ────────────────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: vehicle-damage-detection:latest
+    container_name: vehicle_damage_api
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./checkpoints:/app/checkpoints:ro
+      - ./configs:/app/configs:ro
+      - ./results:/app/results
+    environment:
+      - MODEL_PATH=/app/checkpoints/best_model
+      - CONFIG_PATH=/app/configs/config.yaml
+      - PYTHONUNBUFFERED=1
+    command: >
+      uvicorn src.api.app:app
+        --host 0.0.0.0
+        --port 8080
+        --workers 1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # ── GPU API Server (override for GPU hosts) ───────────────────────────────
+  api-gpu:
+    extends: api
+    image: vehicle-damage-detection:gpu
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # ── Training Job ──────────────────────────────────────────────────────────
+  train:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: vehicle-damage-detection:latest
+    container_name: vehicle_damage_train
+    volumes:
+      - ./data:/app/data
+      - ./checkpoints:/app/checkpoints
+      - ./logs:/app/logs
+      - ./configs:/app/configs
+    environment:
+      - PYTHONUNBUFFERED=1
+      - WANDB_API_KEY=${WANDB_API_KEY:-}
+    command: >
+      python train.py
+        --config configs/config.yaml
+    profiles:
+      - training
+    restart: "no"
+
+  # ── TensorBoard ───────────────────────────────────────────────────────────
+  tensorboard:
+    image: tensorflow/tensorflow:2.12.0
+    container_name: vehicle_damage_tensorboard
+    ports:
+      - "6006:6006"
+    volumes:
+      - ./logs:/logs:ro
+    command: tensorboard --logdir /logs --host 0.0.0.0
+    profiles:
+      - monitoring
+    restart: unless-stopped
+
+networks:
+  default:
+    name: vehicle_damage_net

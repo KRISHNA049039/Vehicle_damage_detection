@@ -1,0 +1,119 @@
+project:
+  name: vehicle-damage-detection
+  version: "1.0.0"
+  description: "Multi-task vehicle damage detection, segmentation and severity estimation"
+
+data:
+  train_dir: "data/images/train"
+  val_dir: "data/images/val"
+  test_dir: "data/images/test"
+  train_annotations: "data/annotations/train.json"
+  val_annotations: "data/annotations/val.json"
+  test_annotations: "data/annotations/test.json"
+  train_tfrecord: "data/tfrecords/train.tfrecord"
+  val_tfrecord: "data/tfrecords/val.tfrecord"
+  test_tfrecord: "data/tfrecords/test.tfrecord"
+  num_workers: 4
+
+model:
+  backbone: "efficientnet-b4"
+  pretrained_weights: "imagenet"
+  image_size: [640, 640]
+  num_classes: 6
+  num_anchors: 9
+  fpn_out_channels: 256
+  freeze_backbone_layers: 100
+  anchor_sizes: [32, 64, 128, 256, 512]
+  anchor_ratios: [0.5, 1.0, 2.0]
+  anchor_scales: [1.0, 1.26, 1.587]
+
+training:
+  epochs: 100
+  batch_size: 8
+  learning_rate: 1.0e-4
+  weight_decay: 1.0e-4
+  gradient_clip_norm: 10.0
+  mixed_precision: true
+  warmup_epochs: 5
+  iou_threshold_pos: 0.5
+  iou_threshold_neg: 0.4
+  nms_threshold: 0.5
+  score_threshold: 0.45
+  max_detections: 100
+  checkpoint_dir: "checkpoints"
+  log_dir: "logs"
+  save_best_only: true
+  monitor_metric: "map_50"
+
+  # Loss weights
+  loss_weights:
+    cls: 1.0
+    box: 1.0
+    mask: 2.0
+    dice: 0.5
+    severity: 1.5
+
+  # Class weights to handle imbalance
+  class_weights:
+    background: 0.1
+    scratch: 2.0
+    dent: 1.5
+    glass_damage: 1.8
+    tear: 1.6
+    body_deform: 1.2
+
+augmentation:
+  horizontal_flip: 0.5
+  vertical_flip: 0.0
+  rotation_limit: 15
+  scale_limit: 0.1
+  shift_limit: 0.05
+  brightness_limit: 0.3
+  contrast_limit: 0.3
+  hue_shift: 10
+  sat_shift: 30
+  val_shift: 20
+  gaussian_blur: 0.2
+  motion_blur: 0.15
+  gaussian_noise: 0.2
+  iso_noise: 0.2
+  coarse_dropout: 0.3
+  grid_distortion: 0.2
+  clahe: 0.3
+  gamma: 0.3
+
+evaluation:
+  iou_thresholds: [0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95]
+  score_threshold: 0.3
+  max_detections_per_image: 100
+
+inference:
+  score_threshold: 0.45
+  nms_iou_threshold: 0.5
+  max_detections: 50
+  batch_size: 1
+
+api:
+  host: "0.0.0.0"
+  port: 8080
+  workers: 1
+  reload: false
+
+classes:
+  - background
+  - scratch
+  - dent
+  - glass_damage
+  - tear
+  - body_deform
+
+severity:
+  minor_threshold: 0.30
+  moderate_threshold: 0.65
+
+colors:
+  scratch: [255, 0, 128]
+  dent: [0, 128, 255]
+  glass_damage: [0, 255, 200]
+  tear: [255, 128, 0]
+  body_deform: [200, 0, 255]
